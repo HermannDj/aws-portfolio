@@ -1,0 +1,104 @@
+name: Terraform Apply / Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: "Project to deploy"
+        required: true
+        type: choice
+        options:
+          - serverless-api
+          - eks-blueprint
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+          - staging
+          - prod
+      action:
+        description: "Terraform action"
+        required: true
+        type: choice
+        default: plan
+        options:
+          - plan
+          - apply
+          - destroy
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: "terraform ${{ inputs.action }} – ${{ inputs.project }} (${{ inputs.environment }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    defaults:
+      run:
+        working-directory: projects/${{ inputs.project }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.7"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive -diff
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        if: inputs.action == 'plan' || inputs.action == 'apply'
+        run: |
+          terraform plan \
+            -var="environment=${{ inputs.environment }}" \
+            -no-color \
+            -out=tfplan.binary
+
+      - name: Terraform apply
+        if: inputs.action == 'apply'
+        run: |
+          terraform apply \
+            -var="environment=${{ inputs.environment }}" \
+            -auto-approve \
+            tfplan.binary
+
+      - name: Terraform destroy (plan)
+        if: inputs.action == 'destroy'
+        run: |
+          terraform plan \
+            -var="environment=${{ inputs.environment }}" \
+            -destroy \
+            -no-color \
+            -out=tfdestroy.binary
+
+      - name: Terraform destroy (apply)
+        if: inputs.action == 'destroy'
+        run: |
+          terraform apply \
+            -var="environment=${{ inputs.environment }}" \
+            -auto-approve \
+            tfdestroy.binary
+
+      - name: Show outputs
+        if: inputs.action == 'apply'
+        run: terraform output
