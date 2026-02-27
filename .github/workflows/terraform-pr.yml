@@ -1,0 +1,165 @@
+name: Terraform PR Checks
+
+on:
+  pull_request:
+    paths:
+      - "projects/**"
+      - ".github/workflows/terraform-pr.yml"
+
+permissions:
+  contents: read
+  pull-requests: write  # to post plan comment
+
+jobs:
+  detect-changes:
+    name: Detect changed projects
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.set-matrix.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find changed projects
+        id: set-matrix
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep '^projects/' \
+            | cut -d'/' -f2 \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "projects=${CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "Changed projects: ${CHANGED}"
+
+  terraform-checks:
+    name: "${{ matrix.project }} – ${{ matrix.check }}"
+    needs: detect-changes
+    if: needs.detect-changes.outputs.projects != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJson(needs.detect-changes.outputs.projects) }}
+        check: [fmt, validate, tflint, checkov, plan]
+
+    defaults:
+      run:
+        working-directory: projects/${{ matrix.project }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.7"
+
+      # ------------------------------------------------------------------
+      # fmt
+      # ------------------------------------------------------------------
+      - name: Terraform fmt
+        if: matrix.check == 'fmt'
+        run: terraform fmt -check -recursive -diff
+
+      # ------------------------------------------------------------------
+      # validate
+      # ------------------------------------------------------------------
+      - name: Terraform init (validate)
+        if: matrix.check == 'validate'
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        if: matrix.check == 'validate'
+        run: terraform validate
+
+      # ------------------------------------------------------------------
+      # tflint
+      # ------------------------------------------------------------------
+      - name: Setup tflint
+        if: matrix.check == 'tflint'
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: "v0.50.3"
+
+      - name: tflint init
+        if: matrix.check == 'tflint'
+        run: tflint --init --config="$GITHUB_WORKSPACE/.tflint.hcl"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: tflint
+        if: matrix.check == 'tflint'
+        run: tflint --config="$GITHUB_WORKSPACE/.tflint.hcl" --format=compact
+
+      # ------------------------------------------------------------------
+      # checkov (security scan)
+      # ------------------------------------------------------------------
+      - name: Setup Python (checkov)
+        if: matrix.check == 'checkov'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install checkov
+        if: matrix.check == 'checkov'
+        run: pip install checkov==3.2.42 --quiet
+
+      - name: Run checkov
+        if: matrix.check == 'checkov'
+        run: |
+          checkov \
+            --directory . \
+            --framework terraform \
+            --soft-fail-on MEDIUM \
+            --compact \
+            --quiet
+
+      # ------------------------------------------------------------------
+      # plan
+      # ------------------------------------------------------------------
+      - name: Configure AWS credentials (plan)
+        if: matrix.check == 'plan'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ca-central-1
+
+      - name: Terraform init (plan)
+        if: matrix.check == 'plan'
+        run: terraform init
+
+      - name: Terraform plan
+        if: matrix.check == 'plan'
+        id: plan
+        run: |
+          terraform plan \
+            -var="environment=dev" \
+            -no-color \
+            -out=tfplan.binary 2>&1 | tee plan.txt
+        continue-on-error: true
+
+      - name: Post plan as PR comment
+        if: matrix.check == 'plan' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('projects/${{ matrix.project }}/plan.txt', 'utf8');
+            const maxLen = 65000;
+            const truncated = plan.length > maxLen
+              ? plan.substring(0, maxLen) + '\n... (truncated)'
+              : plan;
+            const body = `### Terraform Plan – \`${{ matrix.project }}\`\n\`\`\`hcl\n${truncated}\n\`\`\``;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if plan failed
+        if: matrix.check == 'plan' && steps.plan.outcome == 'failure'
+        run: exit 1
