@@ -118,26 +118,28 @@ jobs:
       # ------------------------------------------------------------------
       # plan
       # ------------------------------------------------------------------
-      - name: Skip plan (no AWS credentials configured)
-        if: matrix.check == 'plan' && secrets.AWS_ACCESS_KEY_ID == ''
-        run: |
-          echo "::warning::AWS credentials not configured – skipping Terraform plan."
-          echo "Add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY repository secrets to enable this check."
-
       - name: Configure AWS credentials (plan)
-        if: matrix.check == 'plan' && secrets.AWS_ACCESS_KEY_ID != ''
+        if: matrix.check == 'plan'
+        id: aws-creds
+        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ca-central-1
 
+      - name: Skip plan (no AWS credentials configured)
+        if: matrix.check == 'plan' && steps.aws-creds.outcome != 'success'
+        run: |
+          echo "::warning::AWS credentials not configured – skipping Terraform plan."
+          echo "Add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY repository secrets to enable this check."
+
       - name: Terraform init (plan)
-        if: matrix.check == 'plan' && secrets.AWS_ACCESS_KEY_ID != ''
+        if: matrix.check == 'plan' && steps.aws-creds.outcome == 'success'
         run: terraform init
 
       - name: Terraform plan
-        if: matrix.check == 'plan' && secrets.AWS_ACCESS_KEY_ID != ''
+        if: matrix.check == 'plan' && steps.aws-creds.outcome == 'success'
         id: plan
         run: |
           terraform plan \
@@ -147,7 +149,7 @@ jobs:
         continue-on-error: true
 
       - name: Post plan as PR comment
-        if: matrix.check == 'plan' && secrets.AWS_ACCESS_KEY_ID != '' && github.event_name == 'pull_request'
+        if: matrix.check == 'plan' && steps.aws-creds.outcome == 'success' && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -167,5 +169,5 @@ jobs:
             });
 
       - name: Fail if plan failed
-        if: matrix.check == 'plan' && secrets.AWS_ACCESS_KEY_ID != '' && steps.plan.outcome == 'failure'
+        if: matrix.check == 'plan' && steps.aws-creds.outcome == 'success' && steps.plan.outcome == 'failure'
         run: exit 1
