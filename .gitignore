@@ -1,0 +1,39 @@
+# Terraform generated files
+# Répertoire de travail Terraform / Terraform working directory
+.terraform/
+
+# Fichiers d'état Terraform locaux (toujours utiliser le backend distant en production)
+# Local Terraform state files (always use remote backend in production)
+*.tfstate
+*.tfstate.*
+
+# Plans Terraform / Terraform plans
+*.tfplan
+tfplan
+
+# Variables sensibles / Sensitive variables
+*.tfvars
+!*.tfvars.example
+
+# Fichiers override (overrides locaux non commités)
+# Override files (local overrides not committed)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration file
+.terraformrc
+terraform.rc
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log

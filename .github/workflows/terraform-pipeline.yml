@@ -1,0 +1,254 @@
+# Pipeline CI/CD GitHub Actions pour Terraform
+# CI/CD GitHub Actions pipeline for Terraform
+#
+# Ce workflow automatise le plan et l'apply Terraform sur AWS via OIDC (sans secrets statiques).
+# This workflow automates Terraform plan and apply on AWS via OIDC (no static secrets).
+#
+# Déclencheurs / Triggers:
+#   - pull_request : exécute uniquement le plan (terraform plan)
+#   - push sur main : exécute le plan puis l'apply (terraform apply)
+
+name: Terraform Pipeline
+
+on:
+  # Déclenché sur chaque Pull Request pour vérifier le plan
+  # Triggered on every Pull Request to check the plan
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-pipeline.yml"
+
+  # Déclenché sur chaque push sur main pour appliquer l'infrastructure
+  # Triggered on every push to main to apply the infrastructure
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-pipeline.yml"
+
+# Permissions minimales requises pour OIDC AWS
+# Minimum permissions required for AWS OIDC
+permissions:
+  id-token: write   # Nécessaire pour l'authentification OIDC / Required for OIDC authentication
+  contents: read    # Nécessaire pour checkout / Required for checkout
+  pull-requests: write # Nécessaire pour commenter les PRs / Required to comment on PRs
+
+# Variables d'environnement globales
+# Global environment variables
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  TF_VERSION: "1.7.0"
+  TF_WORKING_DIR: "./terraform"
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 1 : Terraform Plan
+  # Vérifie le code, valide la syntaxe et génère un plan d'exécution
+  # Checks code, validates syntax and generates an execution plan
+  # ─────────────────────────────────────────────────────────────────────────────
+  terraform-plan:
+    name: 🔍 Terraform Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Variables d'environnement spécifiques au job
+    # Job-specific environment variables
+    env:
+      TF_VAR_environment: ${{ vars.TF_VAR_ENVIRONMENT || 'dev' }}
+      TF_VAR_project_name: ${{ vars.TF_VAR_PROJECT_NAME || 'aws-portfolio' }}
+
+    steps:
+      # ─── Étape 1 : Récupérer le code source ───────────────────────────────
+      # Step 1: Checkout source code
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        timeout-minutes: 2
+
+      # ─── Étape 2 : Installer Terraform ────────────────────────────────────
+      # Step 2: Install Terraform
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+        timeout-minutes: 3
+
+      # ─── Étape 3 : Authentification OIDC AWS (sans secrets statiques) ─────
+      # Step 3: AWS OIDC authentication (no static secrets)
+      # OIDC permet d'obtenir des credentials temporaires depuis AWS STS
+      # OIDC allows getting temporary credentials from AWS STS
+      - name: 🔐 Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsOIDCRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-TerraformPlan
+        timeout-minutes: 2
+
+      # ─── Étape 4 : Initialiser Terraform ──────────────────────────────────
+      # Step 4: Initialize Terraform
+      # Télécharge les providers et configure le backend S3
+      # Downloads providers and configures S3 backend
+      - name: 🚀 Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -input=false
+        timeout-minutes: 5
+
+      # ─── Étape 5 : Vérifier le formatage du code ──────────────────────────
+      # Step 5: Check code formatting
+      # Assure que le code respecte les conventions de formatage Terraform
+      # Ensures code follows Terraform formatting conventions
+      - name: 🎨 Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check -recursive
+        timeout-minutes: 2
+
+      # ─── Étape 6 : Valider la syntaxe Terraform ───────────────────────────
+      # Step 6: Validate Terraform syntax
+      - name: ✅ Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+        timeout-minutes: 2
+
+      # ─── Étape 7 : Générer le plan d'exécution ────────────────────────────
+      # Step 7: Generate execution plan
+      # Le plan est sauvegardé dans un fichier pour être utilisé par l'apply
+      # The plan is saved to a file to be used by apply
+      - name: 📋 Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -input=false -out=tfplan -no-color 2>&1 | tee plan_output.txt
+        timeout-minutes: 10
+
+      # ─── Étape 8 : Commenter la PR avec le résultat du plan ───────────────
+      # Step 8: Comment on PR with plan result
+      - name: 💬 Comment PR with Plan
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan_output.txt', 'utf8');
+            const truncated = planOutput.length > 60000
+              ? planOutput.substring(0, 60000) + '\n\n... (output truncated)'
+              : planOutput;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📋 Terraform Plan Output\n\n\`\`\`terraform\n${truncated}\n\`\`\``
+            });
+        timeout-minutes: 2
+
+      # ─── Étape 9 : Sauvegarder le plan comme artefact ─────────────────────
+      # Step 9: Save plan as artifact
+      - name: 📦 Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: terraform-plan
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 1
+        timeout-minutes: 2
+
+      # ─── Étape de nettoyage en cas d'échec ────────────────────────────────
+      # Cleanup step on failure
+      - name: 🧹 Cleanup on Failure
+        if: failure()
+        run: |
+          echo "❌ Le pipeline Terraform a échoué / Terraform pipeline failed"
+          echo "📌 Vérifiez les logs ci-dessus pour identifier le problème"
+          echo "📌 Check the logs above to identify the issue"
+          echo "💡 Conseils / Tips:"
+          echo "  - Vérifiez que les variables GitHub sont correctement configurées"
+          echo "  - Check that GitHub variables are properly configured"
+          echo "  - Assurez-vous que le rôle OIDC IAM est correctement configuré"
+          echo "  - Ensure the OIDC IAM role is properly configured"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 2 : Terraform Apply
+  # Applique le plan uniquement sur push vers main (pas sur les PRs)
+  # Applies the plan only on push to main (not on PRs)
+  # ─────────────────────────────────────────────────────────────────────────────
+  terraform-apply:
+    name: 🚀 Terraform Apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: terraform-plan  # Dépend du job plan / Depends on plan job
+
+    # N'exécute l'apply que sur push vers main
+    # Only runs apply on push to main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    # Environnement de déploiement avec approbation manuelle optionnelle
+    # Deployment environment with optional manual approval
+    environment:
+      name: production
+
+    env:
+      TF_VAR_environment: ${{ vars.TF_VAR_ENVIRONMENT || 'dev' }}
+      TF_VAR_project_name: ${{ vars.TF_VAR_PROJECT_NAME || 'aws-portfolio' }}
+
+    steps:
+      # ─── Étape 1 : Récupérer le code source ───────────────────────────────
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        timeout-minutes: 2
+
+      # ─── Étape 2 : Installer Terraform ────────────────────────────────────
+      - name: 🔧 Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+        timeout-minutes: 3
+
+      # ─── Étape 3 : Authentification OIDC AWS ──────────────────────────────
+      - name: 🔐 Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/GitHubActionsOIDCRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-TerraformApply
+        timeout-minutes: 2
+
+      # ─── Étape 4 : Initialiser Terraform ──────────────────────────────────
+      - name: 🚀 Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -input=false
+        timeout-minutes: 5
+
+      # ─── Étape 5 : Télécharger le plan sauvegardé ─────────────────────────
+      # Step 5: Download saved plan
+      - name: 📦 Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: ${{ env.TF_WORKING_DIR }}
+        timeout-minutes: 2
+
+      # ─── Étape 6 : Appliquer l'infrastructure ─────────────────────────────
+      # Step 6: Apply infrastructure
+      # Utilise le plan sauvegardé pour éviter toute dérive entre plan et apply
+      # Uses saved plan to avoid any drift between plan and apply
+      - name: ✨ Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
+        timeout-minutes: 20
+
+      # ─── Étape 7 : Afficher les outputs ───────────────────────────────────
+      # Step 7: Display outputs
+      - name: 📤 Terraform Output
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform output
+        timeout-minutes: 2
+
+      # ─── Étape de nettoyage en cas d'échec ────────────────────────────────
+      - name: 🧹 Cleanup on Failure
+        if: failure()
+        run: |
+          echo "❌ L'apply Terraform a échoué / Terraform apply failed"
+          echo "⚠️  Vérifiez l'état de l'infrastructure dans la console AWS"
+          echo "⚠️  Check the infrastructure state in the AWS console"
+          echo "💡 Un 'terraform destroy' manuel peut être nécessaire si des ressources ont été partiellement créées"
+          echo "💡 A manual 'terraform destroy' may be needed if resources were partially created"
