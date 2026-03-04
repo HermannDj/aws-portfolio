@@ -1,3 +1,14 @@
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 # --- KMS key dedicated to Aurora storage encryption
 resource "aws_kms_key" "aurora" {
   description             = "KMS key for Aurora PostgreSQL encryption — ${var.project_name}-${var.environment}"
