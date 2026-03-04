@@ -1,3 +1,14 @@
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 # --- WAF v2 WebACL — must be in us-east-1 for CloudFront (CLOUDFRONT scope)
 # Cost: ~$5/month base + $1/rule/month
 resource "aws_wafv2_web_acl" "main" {
@@ -278,7 +289,7 @@ resource "aws_cloudfront_distribution" "main" {
     minimum_protocol_version = "TLSv1.2_2021"
   }
 
-  aliases = ["${var.domain_name}", "www.${var.domain_name}"]
+  aliases = [var.domain_name, "www.${var.domain_name}"]
 
   # Access logging to dedicated S3 bucket
   logging_config {
