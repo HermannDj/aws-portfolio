@@ -125,7 +125,7 @@ variable "enable_cloudtrail" {
 variable "eks_public_access_cidrs" {
   description = "List of CIDR blocks allowed to access the EKS public API endpoint. Restrict to your IP in production."
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Override in production with your actual CIDR
+  default     = ["0.0.0.0/0"] # Override in production with your actual CIDR
   validation {
     condition     = length(var.eks_public_access_cidrs) > 0
     error_message = "At least one CIDR must be specified for EKS public access."
