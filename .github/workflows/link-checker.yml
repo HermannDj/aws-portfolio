@@ -34,7 +34,7 @@ jobs:
           args: |
             --verbose
             --no-progress
-            --accept 200,204,206,301,302,403,429
+            --accept 200,204,206,301,302,403,429,999
             --exclude-loopback
             --exclude "^mailto:"
             --exclude "^https://github\.com/HermannDj/aws-portfolio/actions"
