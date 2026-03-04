@@ -179,8 +179,8 @@ resource "aws_eks_node_group" "spot" {
   }
 
   labels = {
-    role                              = "spot"
-    "node.kubernetes.io/lifecycle"    = "spot"
+    role                           = "spot"
+    "node.kubernetes.io/lifecycle" = "spot"
   }
 
   taint {
