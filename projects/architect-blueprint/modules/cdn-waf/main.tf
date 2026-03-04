@@ -188,7 +188,7 @@ resource "aws_cloudfront_distribution" "main" {
   is_ipv6_enabled     = true
   comment             = "${var.project_name}-${var.environment} CDN"
   default_root_object = "index.html"
-  http_version        = "http2and3" # HTTP/3 (QUIC) for maximum performance
+  http_version        = "http2and3"      # HTTP/3 (QUIC) for maximum performance
   price_class         = "PriceClass_100" # US + Europe edge locations only
 
   # Attach WAF WebACL if enabled
