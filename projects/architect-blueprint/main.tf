@@ -23,6 +23,8 @@ module "networking_dr" {
 }
 
 # --- Module 3: EKS HA — highly available Kubernetes cluster across 3 AZs
+# SECURITY: Override eks_public_access_cidrs with your IP in production
+# e.g., cluster_endpoint_public_access_cidrs = ["YOUR_IP/32"]
 module "eks_ha" {
   source = "./modules/eks-ha"
 
@@ -34,7 +36,7 @@ module "eks_ha" {
   node_min_size        = var.eks_node_min_size
   node_max_size        = var.eks_node_max_size
   node_desired_size    = var.eks_node_desired_size
-  allowed_cidr_blocks  = ["0.0.0.0/0"]
+  allowed_cidr_blocks  = var.eks_public_access_cidrs
 
   depends_on = [module.networking]
 }
