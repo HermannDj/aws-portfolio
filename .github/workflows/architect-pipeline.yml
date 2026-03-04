@@ -95,13 +95,14 @@ jobs:
 
       - name: Run Trivy
         if: matrix.scanner == 'trivy'
-        uses: aquasecurity/trivy-action@0.34.2  # Updated from 0.28.0
+        uses: aquasecurity/trivy-action@0.34.2
         with:
           scan-type: config
           scan-ref: ${{ env.TF_WORKING_DIR }}
           format: sarif
           output: trivy-results.sarif
           exit-code: "0"
+          version: latest
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Job 3: Plan — Terraform plan with AWS OIDC authentication
