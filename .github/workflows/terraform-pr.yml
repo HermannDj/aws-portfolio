@@ -1,4 +1,13 @@
 name: Terraform PR Checks
+# This workflow lives in and runs against the HermannDj/aws-portfolio repository.
+#
+# External GitHub Actions used:
+#   actions/checkout@v4                    → https://github.com/actions/checkout
+#   hashicorp/setup-terraform@v3           → https://github.com/hashicorp/setup-terraform
+#   terraform-linters/setup-tflint@v4      → https://github.com/terraform-linters/setup-tflint
+#   actions/setup-python@v5                → https://github.com/actions/setup-python
+#   aws-actions/configure-aws-credentials@v4 → https://github.com/aws-actions/configure-aws-credentials
+#   actions/github-script@v7               → https://github.com/actions/github-script
 
 on:
   pull_request:

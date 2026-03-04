@@ -1,4 +1,10 @@
 name: Terraform Apply / Destroy
+# This workflow lives in and runs against the HermannDj/aws-portfolio repository.
+#
+# External GitHub Actions used:
+#   actions/checkout@v4                    → https://github.com/actions/checkout
+#   hashicorp/setup-terraform@v3           → https://github.com/hashicorp/setup-terraform
+#   aws-actions/configure-aws-credentials@v4 → https://github.com/aws-actions/configure-aws-credentials
 
 on:
   workflow_dispatch:

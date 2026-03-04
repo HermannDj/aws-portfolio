@@ -161,6 +161,9 @@ All input variables include `validation` blocks to catch misconfiguration early
 
 ## GitHub Actions CI/CD
 
+Both workflow files live in **this repository** (`HermannDj/aws-portfolio`) under
+`.github/workflows/` and run directly against its `projects/` tree.
+
 ### PR Gate (`terraform-pr.yml`)
 
 Triggered on every pull request that touches `projects/**`:
@@ -178,10 +181,23 @@ Triggered via **Actions → terraform-apply → Run workflow**.
 Inputs:
 - `project` – which project to apply (`serverless-api` or `eks-blueprint`)
 - `environment` – target environment (`dev`, `staging`, `prod`)
-- `action` – `apply` or `destroy`
+- `action` – `plan`, `apply`, or `destroy`
 
 > **Note:** Requires `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (or OIDC role)
 > configured as repository secrets.
+
+### Action Dependencies
+
+The workflows are built on the following publicly maintained GitHub Actions:
+
+| Action | Source Repository | Used in |
+|--------|-------------------|---------|
+| `actions/checkout@v4` | <https://github.com/actions/checkout> | both workflows |
+| `hashicorp/setup-terraform@v3` | <https://github.com/hashicorp/setup-terraform> | both workflows |
+| `aws-actions/configure-aws-credentials@v4` | <https://github.com/aws-actions/configure-aws-credentials> | both workflows |
+| `terraform-linters/setup-tflint@v4` | <https://github.com/terraform-linters/setup-tflint> | `terraform-pr.yml` |
+| `actions/setup-python@v5` | <https://github.com/actions/setup-python> | `terraform-pr.yml` |
+| `actions/github-script@v7` | <https://github.com/actions/github-script> | `terraform-pr.yml` |
 
 ---
 
