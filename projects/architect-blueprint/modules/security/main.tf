@@ -34,8 +34,8 @@ resource "aws_iam_account_password_policy" "main" {
   require_uppercase_characters   = true
   require_symbols                = true
   allow_users_to_change_password = true
-  max_password_age               = 90  # force rotation every 90 days
-  password_reuse_prevention      = 24  # cannot reuse last 24 passwords
+  max_password_age               = 90 # force rotation every 90 days
+  password_reuse_prevention      = 24 # cannot reuse last 24 passwords
 }
 
 # --- GuardDuty — continuous threat detection with S3, Kubernetes, and malware protection
@@ -109,6 +109,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
   rule {
     id     = "expire-after-365-days"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 365
@@ -188,8 +190,8 @@ resource "aws_iam_role_policy" "cloudtrail" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = ["logs:CreateLogStream", "logs:PutLogEvents"]
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
       Resource = "${aws_cloudwatch_log_group.cloudtrail[0].arn}:*"
     }]
   })
