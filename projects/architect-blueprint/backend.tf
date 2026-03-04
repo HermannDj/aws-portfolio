@@ -5,6 +5,6 @@ terraform {
     region         = "us-east-1"
     encrypt        = true
     dynamodb_table = "terraform-state-lock"
-    kms_key_id     = "alias/terraform-state-key" # KMS encryption for state
+    # kms_key_id   = "alias/terraform-state-key" # Commented — uses default S3 encryption if key doesn't exist
   }
 }

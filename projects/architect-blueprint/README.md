@@ -164,6 +164,7 @@ aws iam create-role \
 # AWS_ROLE_ARN      = arn:aws:iam::<ACCOUNT_ID>:role/github-actions-terraform
 # TF_STATE_BUCKET   = terraform-state-hermanndj
 # TF_LOCK_TABLE     = terraform-state-lock
+# DOMAIN_NAME       = your-registered-route53-domain.com  (e.g. example.com)
 ```
 
 Trust policy (`oidc-trust-policy.json`):
