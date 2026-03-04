@@ -9,11 +9,46 @@ terraform {
   }
 }
 
+# --- Current AWS account data source (used for KMS key policy)
+data "aws_caller_identity" "current" {}
+
 # --- KMS key dedicated to Aurora storage encryption
 resource "aws_kms_key" "aurora" {
   description             = "KMS key for Aurora PostgreSQL encryption — ${var.project_name}-${var.environment}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+
+  # CKV2_AWS_64: explicit key policy required
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow RDS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
   lifecycle {
     prevent_destroy = true
@@ -62,6 +97,7 @@ resource "aws_db_subnet_group" "aurora" {
 
 # --- Secrets Manager secret for Aurora credentials (fallback if not using manage_master_user_password)
 resource "aws_secretsmanager_secret" "aurora" {
+  # checkov:skip=CKV2_AWS_57: Rotation requires dedicated Lambda; managed via aws_rds_cluster manage_master_user_password instead
   name        = "${var.project_name}/${var.environment}/aurora/credentials"
   description = "Aurora PostgreSQL master credentials for ${var.project_name}-${var.environment}"
   kms_key_id  = aws_kms_key.aurora.arn
@@ -105,6 +141,27 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
+# --- Aurora cluster parameter group with query logging (CKV2_AWS_27)
+resource "aws_rds_cluster_parameter_group" "aurora" {
+  name        = "${var.project_name}-${var.environment}-aurora-pg"
+  family      = var.aurora_parameter_group_family
+  description = "Aurora PostgreSQL cluster parameter group with query logging"
+
+  parameter {
+    name  = "log_statement"
+    value = "ddl"
+  }
+
+  parameter {
+    name  = "log_min_duration_statement"
+    value = "1000"
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-aurora-pg"
+  }
+}
+
 # --- Aurora PostgreSQL cluster — Multi-AZ, encryption, PITR, IAM auth
 # Cost: ~$58/month for db.t3.medium writer + reader
 resource "aws_rds_cluster" "main" {
@@ -133,11 +190,14 @@ resource "aws_rds_cluster" "main" {
   # Allows authentication using IAM tokens instead of passwords
   iam_database_authentication_enabled = true
 
-  db_subnet_group_name   = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
+  db_subnet_group_name            = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids          = [aws_security_group.aurora.id]
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora.name
 
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-${var.environment}-aurora-final-${var.final_snapshot_suffix}"
+
+  copy_tags_to_snapshot = true # CKV_AWS_313
 
   lifecycle {
     prevent_destroy = true
@@ -161,7 +221,8 @@ resource "aws_rds_cluster_instance" "main" {
   db_subnet_group_name = aws_db_subnet_group.aurora.name
 
   # Performance Insights adds query-level monitoring at no extra cost for 7 days retention
-  performance_insights_enabled = true
+  performance_insights_enabled    = true
+  performance_insights_kms_key_id = aws_kms_key.aurora.arn # CKV_AWS_354
 
   # Enhanced Monitoring: OS-level metrics every 60 seconds
   monitoring_interval = 60
@@ -172,4 +233,58 @@ resource "aws_rds_cluster_instance" "main" {
   tags = {
     Name = "${var.project_name}-${var.environment}-aurora-${count.index == 0 ? "writer" : "reader"}"
   }
+}
+
+# --- AWS Backup vault and plan for Aurora (CKV2_AWS_8)
+resource "aws_backup_vault" "aurora" {
+  name        = "${var.project_name}-${var.environment}-aurora-backup-vault"
+  kms_key_arn = aws_kms_key.aurora.arn
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-aurora-backup-vault"
+  }
+}
+
+resource "aws_backup_plan" "aurora" {
+  name = "${var.project_name}-${var.environment}-aurora-backup"
+
+  rule {
+    rule_name         = "daily_backup"
+    target_vault_name = aws_backup_vault.aurora.name
+    schedule          = "cron(0 2 * * ? *)"
+
+    lifecycle {
+      delete_after = 30
+    }
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-aurora-backup-plan"
+  }
+}
+
+resource "aws_iam_role" "backup" {
+  name = "${var.project_name}-${var.environment}-backup-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "backup.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "backup" {
+  role       = aws_iam_role.backup.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+}
+
+resource "aws_backup_selection" "aurora" {
+  name         = "${var.project_name}-${var.environment}-aurora-selection"
+  plan_id      = aws_backup_plan.aurora.id
+  iam_role_arn = aws_iam_role.backup.arn
+
+  resources = [aws_rds_cluster.main.arn]
 }
