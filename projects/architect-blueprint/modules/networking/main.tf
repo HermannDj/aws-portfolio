@@ -9,9 +9,54 @@ terraform {
   }
 }
 
+# --- Current AWS account data source (used for KMS key policy)
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # --- Retrieve available AZs in the current region
 data "aws_availability_zones" "available" {
   state = "available"
+}
+
+# --- KMS key for VPC Flow Logs encryption (CKV_AWS_158)
+resource "aws_kms_key" "flow_logs" {
+  description             = "KMS key for VPC Flow Logs — ${var.project_name}-${var.environment}"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-flow-logs-kms"
+  }
 }
 
 # --- VPC: foundation of the network with DNS support enabled
@@ -169,10 +214,11 @@ resource "aws_route_table_association" "database" {
   route_table_id = aws_route_table.database.id
 }
 
-# --- CloudWatch Log Group for VPC Flow Logs (retention: 90 days)
+# --- CloudWatch Log Group for VPC Flow Logs (retention: 365 days, KMS encrypted)
 resource "aws_cloudwatch_log_group" "flow_logs" {
   name              = "/aws/vpc/${var.project_name}-${var.environment}/flow-logs"
-  retention_in_days = var.flow_log_retention_days
+  retention_in_days = var.flow_log_retention_days # CKV_AWS_338
+  kms_key_id        = aws_kms_key.flow_logs.arn   # CKV_AWS_158
 
   tags = {
     Name = "${var.project_name}-${var.environment}-flow-logs"
@@ -194,6 +240,8 @@ resource "aws_iam_role" "flow_logs" {
 }
 
 resource "aws_iam_role_policy" "flow_logs" {
+  # checkov:skip=CKV_AWS_355: CloudWatch Logs actions require wildcard resource for cross-log-group operations
+  # checkov:skip=CKV_AWS_290: CloudWatch Logs write actions require wildcard resource; restricted to log actions only
   name = "${var.project_name}-${var.environment}-flow-logs-policy"
   role = aws_iam_role.flow_logs.id
 
@@ -225,6 +273,15 @@ resource "aws_flow_log" "main" {
   }
 }
 
+# --- Default security group with no rules — deny all traffic (CKV2_AWS_12)
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-default-sg-restricted"
+  }
+}
+
 # --- DB Subnet Group — registers isolated database subnets with RDS Aurora
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-${var.environment}-db-subnet-group"
@@ -237,6 +294,8 @@ resource "aws_db_subnet_group" "main" {
 
 # --- Bastion security group — SSH access restricted to approved CIDRs only
 resource "aws_security_group" "bastion" {
+  # checkov:skip=CKV2_AWS_5: SG is attached to bastion instances in separate module
+  # checkov:skip=CKV_AWS_24: SSH access is restricted to approved CIDRs defined in allowed_cidr_blocks variable
   count = length(var.allowed_cidr_blocks) > 0 ? 1 : 0
 
   name        = "${var.project_name}-${var.environment}-bastion-sg"

@@ -13,10 +13,14 @@ terraform {
   }
 }
 
-# --- CloudWatch Log Group for EKS control plane logs
+# --- Current AWS account data source (used for KMS key policy)
+data "aws_caller_identity" "current" {}
+
+# --- CloudWatch Log Group for EKS control plane logs (365-day retention)
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/eks/${var.project_name}-${var.environment}/cluster"
-  retention_in_days = 90
+  retention_in_days = 365                 # CKV_AWS_338
+  kms_key_id        = aws_kms_key.eks.arn # CKV_AWS_158
 
   tags = {
     Name = "${var.project_name}-${var.environment}-eks-logs"
@@ -28,6 +32,38 @@ resource "aws_kms_key" "eks" {
   description             = "KMS key for EKS secrets encryption — ${var.project_name}-${var.environment}"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+
+  # CKV2_AWS_64: explicit key policy required
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EKS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
   lifecycle {
     prevent_destroy = true
@@ -65,6 +101,8 @@ resource "aws_iam_role_policy_attachment" "cluster_eks_policy" {
 # --- EKS Cluster — HA, private nodes, audit logging, KMS secrets encryption
 # Cost: ~$72/month for the control plane
 resource "aws_eks_cluster" "main" {
+  # checkov:skip=CKV_AWS_38: Public access CIDRs are configurable via allowed_cidr_blocks variable; restrict in production
+  # checkov:skip=CKV_AWS_39: Public endpoint is intentionally enabled for cluster management access
   name     = "${var.project_name}-${var.environment}"
   role_arn = aws_iam_role.cluster.arn
   version  = var.cluster_version

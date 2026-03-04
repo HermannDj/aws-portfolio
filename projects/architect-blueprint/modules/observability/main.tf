@@ -12,9 +12,63 @@ terraform {
 # --- Current AWS region data source (used in CloudWatch dashboard widgets)
 data "aws_region" "current" {}
 
+# --- Current AWS account data source (used for KMS key policy)
+data "aws_caller_identity" "current" {}
+
+# --- KMS key for CloudWatch Logs encryption (CKV_AWS_158, CKV_AWS_26)
+resource "aws_kms_key" "logs" {
+  description             = "KMS key for CloudWatch Logs and SNS encryption — ${var.project_name}-${var.environment}"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  # CKV2_AWS_64: explicit key policy required
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs and SNS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "logs.${data.aws_region.current.name}.amazonaws.com",
+            "sns.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-logs-kms"
+  }
+}
+
+resource "aws_kms_alias" "logs" {
+  name          = "alias/${var.project_name}-${var.environment}-logs"
+  target_key_id = aws_kms_key.logs.key_id
+}
+
 # --- SNS topic for alert notifications
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-${var.environment}-alerts"
+  name              = "${var.project_name}-${var.environment}-alerts"
+  kms_master_key_id = aws_kms_key.logs.arn # CKV_AWS_26
 
   tags = {
     Name = "${var.project_name}-${var.environment}-alerts"
@@ -30,22 +84,25 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.alert_email
 }
 
-# --- CloudWatch Log Groups for each service (90-day retention)
+# --- CloudWatch Log Groups for each service (365-day retention, KMS encrypted)
 resource "aws_cloudwatch_log_group" "eks" {
   name              = "/aws/observability/${var.project_name}-${var.environment}/eks"
-  retention_in_days = 90
+  retention_in_days = 365                  # CKV_AWS_338
+  kms_key_id        = aws_kms_key.logs.arn # CKV_AWS_158
   tags              = { Name = "${var.project_name}-${var.environment}-eks-obs-logs" }
 }
 
 resource "aws_cloudwatch_log_group" "aurora" {
   name              = "/aws/observability/${var.project_name}-${var.environment}/aurora"
-  retention_in_days = 90
+  retention_in_days = 365                  # CKV_AWS_338
+  kms_key_id        = aws_kms_key.logs.arn # CKV_AWS_158
   tags              = { Name = "${var.project_name}-${var.environment}-aurora-obs-logs" }
 }
 
 resource "aws_cloudwatch_log_group" "cloudfront" {
   name              = "/aws/observability/${var.project_name}-${var.environment}/cloudfront"
-  retention_in_days = 90
+  retention_in_days = 365                  # CKV_AWS_338
+  kms_key_id        = aws_kms_key.logs.arn # CKV_AWS_158
   tags              = { Name = "${var.project_name}-${var.environment}-cloudfront-obs-logs" }
 }
 

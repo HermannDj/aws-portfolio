@@ -35,6 +35,12 @@ variable "aurora_engine_version" {
   default     = "15.4"
 }
 
+variable "aurora_parameter_group_family" {
+  description = "Aurora PostgreSQL parameter group family (must match engine version)"
+  type        = string
+  default     = "aurora-postgresql15"
+}
+
 variable "database_name" {
   description = "Name of the initial database in the Aurora cluster"
   type        = string

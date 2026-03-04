@@ -28,5 +28,5 @@ variable "allowed_cidr_blocks" {
 variable "flow_log_retention_days" {
   description = "Number of days to retain VPC Flow Logs in CloudWatch"
   type        = number
-  default     = 90
+  default     = 365
 }
