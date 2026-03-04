@@ -1,1 +1,46 @@
-name: Terraform Workflow\n\non:  \n  push:  \n    paths:  \n      - 'projects/serverless-api/**'  \n      - 'projects/eks-blueprint/**'  \n  workflow_dispatch:  \n\njobs:  \n  terraform:  \n    runs-on: ubuntu-latest  \n    strategy:  \n      matrix:  \n        project: [ 'projects/serverless-api', 'projects/eks-blueprint' ]  \n    steps:  \n      - name: Checkout Code  \n        uses: actions/checkout@v2  \n      - name: Configure AWS Credentials  \n        uses: aws-actions/configure-aws-credentials@v1  \n        with:  \n          aws-region: ca-central-1  \n          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/MyRole  \n      - name: Terraform Fmt  \n        run: terraform fmt -check -recursive ${{ matrix.project }}  \n      - name: Terraform Init  \n        run: terraform init ${{ matrix.project }}  \n      - name: Terraform Validate  \n        run: terraform validate ${{ matrix.project }}  \n      - name: Run TFLint  \n        run: tflint ${{ matrix.project }}  \n      - name: Run Checkov  \n        run: checkov -d ${{ matrix.project }}  \n      - name: Run Trivy  \n        run: trivy image --quiet --ignore-unfixed ${{ secrets.IMAGE }}  \n      - name: Terraform Plan  \n        run: terraform plan ${{ matrix.project }}\n\n  apply:  \n    runs-on: ubuntu-latest  \n    needs: terraform  \n    if: github.event_name == 'workflow_dispatch'  \n    steps:  \n      - name: Checkout Code  \n        uses: actions/checkout@v2  \n      - name: Configure AWS Credentials  \n        uses: aws-actions/configure-aws-credentials@v1  \n        with:  \n          aws-region: ca-central-1  \n          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/MyRole  \n      - name: Terraform Apply  \n        run: terraform apply -auto-approve ${{ matrix.project }}\n
+name: Architect Pipeline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  format_validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Terraform fmt
+        run: terraform fmt -check
+
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: TFLint
+        run: tflint
+
+      - name: Checkov
+        run: checkov -d .
+
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform plan
+        run: terraform plan
+
+  workflow_dispatch:
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      region: ca-central-1
