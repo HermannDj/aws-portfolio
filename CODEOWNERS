@@ -1,0 +1,12 @@
+# Global owners
+* @HermannDj
+
+# Terraform configurations
+*.tf @HermannDj
+*.tfvars @HermannDj
+
+# GitHub workflows
+/.github/ @HermannDj
+
+# Documentation
+*.md @HermannDj

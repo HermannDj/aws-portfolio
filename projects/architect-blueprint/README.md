@@ -1,8 +1,8 @@
-![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.7-7B42BC?logo=terraform)
-![AWS](https://img.shields.io/badge/AWS-Solutions_Architect-FF9900?logo=amazonaws)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-1.29-326CE5?logo=kubernetes)
-![PostgreSQL](https://img.shields.io/badge/Aurora-PostgreSQL_15-4169E1?logo=postgresql)
-![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-2088FF?logo=githubactions)
+[![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.7-7B42BC?logo=terraform)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/AWS-Solutions_Architect-FF9900?logo=amazonaws)](https://aws.amazon.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.29-326CE5?logo=kubernetes)](https://kubernetes.io/)
+[![PostgreSQL](https://img.shields.io/badge/Aurora-PostgreSQL_15-4169E1?logo=postgresql)](https://aws.amazon.com/rds/aurora/)
+[![CI/CD](https://github.com/HermannDj/aws-portfolio/actions/workflows/architect-pipeline.yml/badge.svg)](https://github.com/HermannDj/aws-portfolio/actions)
 
 # Architect Blueprint — Multi-Region AWS Production Architecture
 
@@ -90,12 +90,37 @@
 
 ---
 
+## 🎯 Business Use Cases
+
+This architecture is suitable for:
+
+- **SaaS Applications** requiring global content delivery and multi-tenant isolation
+- **E-commerce Platforms** with high availability and PCI DSS compliance requirements
+- **Enterprise Applications** needing disaster recovery and full audit trails
+- **Startups** seeking production-ready infrastructure with cost optimization from day one
+
+---
+
+## 💡 What This Architecture Demonstrates
+
+| **Skill**                     | **Implementation**                                                                 |
+|-------------------------------|------------------------------------------------------------------------------------|
+| **Multi-region design**       | Primary VPC (us-east-1) + DR VPC (us-west-2) with Transit Gateway readiness       |
+| **High availability**         | Multi-AZ deployments across 3 availability zones, Aurora writer + reader replica   |
+| **Security in depth**         | Network isolation, KMS encryption, WAF, GuardDuty, Security Hub, CloudTrail       |
+| **Cost optimization**         | Spot instance readiness, S3 lifecycle policies, PriceClass_100 for CloudFront     |
+| **Observability**             | Custom CloudWatch dashboards, X-Ray tracing, budget alerts at 80% and 100%        |
+| **GitOps & CI/CD**            | GitHub Actions with AWS OIDC (no static credentials), automated plan/apply        |
+| **Compliance**                | CIS Benchmark v1.4, AWS Foundational Security Best Practices via Security Hub     |
+
+---
+
 ## Cost Estimation
 
 > ⚠️ **DESTROY AFTER DEMO** — Run `terraform destroy` when done to avoid charges!
 > ```bash
 > cd projects/architect-blueprint
-> terraform destroy -var="environment=prod"
+> terraform destroy -var="environment=prod" -var="domain_name=yourdomain.com"
 > ```
 
 | Service              | Monthly Cost (prod) | Free Tier    |

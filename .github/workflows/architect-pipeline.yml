@@ -140,6 +140,8 @@ jobs:
         run: |
           terraform plan \
             -var="environment=prod" \
+            -var="domain_name=${{ secrets.DOMAIN_NAME || 'demo.example.com' }}" \
+            -var="project_name=${{ vars.PROJECT_NAME || 'architect-blueprint' }}" \
             -out=tfplan \
             -no-color 2>&1 | tee plan-output.txt
         continue-on-error: true
