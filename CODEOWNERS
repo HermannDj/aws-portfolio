@@ -1,0 +1,17 @@
+# CODEOWNERS
+# This file defines code ownership for automatic PR reviewer assignment.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+* @HermannDj
+
+# GitHub workflows and configuration
+.github/ @HermannDj
+
+# Terraform infrastructure code
+projects/ @HermannDj
+
+# Documentation
+*.md @HermannDj
+SECURITY.md @HermannDj
+LICENSE @HermannDj
