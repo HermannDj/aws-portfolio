@@ -125,7 +125,7 @@ resource "aws_rds_cluster" "main" {
   db_subnet_group_name   = aws_db_subnet_group.aurora.name
   vpc_security_group_ids = [aws_security_group.aurora.id]
 
-  skip_final_snapshot    = false
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-${var.environment}-aurora-final-${var.final_snapshot_suffix}"
 
   lifecycle {
