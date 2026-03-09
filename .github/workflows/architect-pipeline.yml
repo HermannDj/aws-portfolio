@@ -65,7 +65,7 @@ jobs:
           output_format: github_failed_only
 
       - name: Trivy (config scan) - do not fail build
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: config
           scan-ref: ${{ env.TF_WORKING_DIR }}
