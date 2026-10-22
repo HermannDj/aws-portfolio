@@ -4,7 +4,7 @@
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: hermann.djehoue@gmail.com
+Instead, please report them via email to: harnaud.djoko@gmail.com
 
 You should receive a response within 48 hours.
 
