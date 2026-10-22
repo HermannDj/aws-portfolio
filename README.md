@@ -6,7 +6,7 @@
 
 # 🏗️ AWS Solutions Architect Portfolio
 
-> **Production-grade, multi-region AWS architectures** demonstrating enterprise-level cloud expertise for **AWS Solutions Architect Professional** and **DevOps Engineering** roles.
+> **Production-grade, multi-region AWS architectures** demonstrating enterprise-level cloud expertise for **cloud architecture** and **DevOps engineering** engagements.
 
 ---
 
@@ -42,7 +42,7 @@ This repository showcases **production-ready AWS infrastructure-as-code (IaC)** 
 
 **📊 Cost:** ~$330/month (detailed breakdown in README)  
 **⏱️ Deployment Time:** ~15 minutes  
-**🎯 Skills Demonstrated:** Solutions Architect Professional, Well-Architected Framework, compliance
+**🎯 Skills Demonstrated:** AWS Well-Architected Framework, multi-region design, security & compliance
 
 [**👉 View Project Details**](projects/architect-blueprint/README.md)
 
@@ -52,7 +52,7 @@ This repository showcases **production-ready AWS infrastructure-as-code (IaC)** 
 
 | **Category**                | **Technologies & Practices**                                                                 |
 |-----------------------------|----------------------------------------------------------------------------------------------|
-| **Cloud Platforms**         | AWS (Solutions Architect Professional level)                                                 |
+| **Cloud Platforms**         | AWS (AWS Certified Solutions Architect – Associate)                                          |
 | **Infrastructure as Code**  | Terraform 1.7+, modular design, remote state with S3 + DynamoDB                              |
 | **Networking**              | VPC, subnets, NAT Gateway, Transit Gateway, VPC Flow Logs, CloudFront, Route53               |
 | **Compute**                 | EKS (Kubernetes 1.29), managed node groups, Fargate-ready, Karpenter autoscaling             |
@@ -173,8 +173,8 @@ I'm a cloud architect specializing in AWS infrastructure and DevOps automation. 
 ## 🤝 Contact & Profiles
 
 - **GitHub:** [@HermannDj](https://github.com/HermannDj)
-- **LinkedIn:** [Connect with me](https://linkedin.com/in/hermann-djehoue)
-- **Email:** hermann.djehoue@gmail.com
+- **LinkedIn:** [Connect with me](https://linkedin.com/in/hermanndjoko)
+- **Email:** harnaud.djoko@gmail.com
 
 ---
 
