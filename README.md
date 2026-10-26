@@ -173,7 +173,7 @@ I'm a cloud architect specializing in AWS infrastructure and DevOps automation. 
 ## 🤝 Contact & Profiles
 
 - **GitHub:** [@HermannDj](https://github.com/HermannDj)
-- **LinkedIn:** [Connect with me](https://linkedin.com/in/hermanndjoko)
+- **LinkedIn:** [Connect with me](https://linkedin.com/in/hermann-djoko)
 - **Email:** harnaud.djoko@gmail.com
 
 ---
